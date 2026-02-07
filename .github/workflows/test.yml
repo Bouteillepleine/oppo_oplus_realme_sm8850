@@ -13,7 +13,7 @@ on:
         description: 'KernelSU branch (SukiSU Ultra/ReSukiSU/KernelSU Next/MKSU/KSU (official)/No built-in KSU; default: SukiSU Ultra)'
         required: true
         type: choice
-        default: 'resukisu'
+        default: 'sukisu'
         options:
           - 'sukisu'
           - 'resukisu'
@@ -130,7 +130,6 @@ jobs:
             sed -i 's/ -dirty//g' "$f"
             sed -i '$i res=$(echo "$res" | sed '\''s/-dirty//g'\'')' "$f"
           done
-
       - name: Configure ccache directory
         run: |
           echo "CCACHE_DIR=$HOME/.ccache_6.12.23" >> $GITHUB_ENV
@@ -138,7 +137,6 @@ jobs:
           echo "Current disk space:"
           df -h
           echo "Current kernel build version: 6.12.23"
-
       - name: Restore ccache for this kernel version
         uses: actions/cache@v4
         id: ccache-restore
@@ -171,7 +169,6 @@ jobs:
             echo "ccache cache-hit details:"
             ccache -sv
           fi
-
       - name: Add KernelSU
         id: ksu_version
         run: |
@@ -248,7 +245,6 @@ jobs:
           else
             echo "No built-in KernelSU selected; skipping KernelSU setup..."
           fi
-
       - name: Apply KernelSU & SUSFS patches
         if: inputs.susfs_enable
         run: |
@@ -337,7 +333,6 @@ jobs:
           else
             echo "No built-in KernelSU selected; skipping susfs setup..."
           fi
-
       - name: Add SUSFS config options
         if: inputs.susfs_enable
         run: |
@@ -417,7 +412,6 @@ jobs:
           cd common
           wget https://github.com/cctv18/oppo_oplus_realme_sm8850/raw/refs/heads/main/other_patch/config.patch
           patch -p1 -F 3 < config.patch || true
-
       - name: Add BBR and other congestion control algorithms
         run: |
           if [[ "${{ github.event.inputs.bbr_enable }}" != "false" ]]; then
@@ -432,7 +426,6 @@ jobs:
               echo "CONFIG_DEFAULT_TCP_CONG=cubic" >> ./common/arch/arm64/configs/gki_defconfig
             fi
           fi
-
       - name: Enable ADIOS I/O scheduler
         if: inputs.adios_enable
         run: |
@@ -440,7 +433,6 @@ jobs:
           cd kernel_workspace
           echo "CONFIG_MQ_IOSCHED_ADIOS=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_MQ_IOSCHED_DEFAULT_ADIOS=y" >> ./common/arch/arm64/configs/gki_defconfig
-
       - name: Enable Re-Kernel support
         if: inputs.rekernel_enable
         run: |
@@ -448,7 +440,6 @@ jobs:
           cd kernel_workspace
           echo "CONFIG_REKERNEL=y" >> ./common/arch/arm64/configs/gki_defconfig
           echo "CONFIG_REKERNEL_NETWORK=y" >> ./common/arch/arm64/configs/gki_defconfig
-
       - name: Enable kernel-level baseband protection
         if: inputs.baseband_guard
         run: |
@@ -458,7 +449,6 @@ jobs:
           cd ./common
           curl -sSL https://github.com/cctv18/Baseband-guard/raw/master/setup.sh | bash
           sed -i '/^config LSM$/,/^help$/{ /^[[:space:]]*default/ { /baseband_guard/! s/selinux/selinux,baseband_guard/ } }' security/Kconfig
-
       - name: Set build name
         run: |
           cd kernel_workspace
@@ -478,23 +468,18 @@ jobs:
           fi
           sed -i 's/${scm_version}//' ./common/scripts/setlocalversion
           echo "CONFIG_LOCALVERSION_AUTO=n" >> ./common/arch/arm64/configs/gki_defconfig
-
       - name: Set kernel build timestamp
         shell: bash
         run: |
           set -euo pipefail
           unset SOURCE_DATE_EPOCH || true
-
           # This is what shows in uname -v / uname -a after "#1 SMP PREEMPT"
           TS="$(TZ='Asia/Shanghai' date '+%a %b %e %T %Z %Y')"
-
           echo "KBUILD_BUILD_TIMESTAMP=$TS" >> "$GITHUB_ENV"
           echo "KBUILD_BUILD_VERSION=1" >> "$GITHUB_ENV"
           echo "KBUILD_BUILD_USER=github" >> "$GITHUB_ENV"
           echo "KBUILD_BUILD_HOST=actions" >> "$GITHUB_ENV"
-
           echo "Using KBUILD_BUILD_TIMESTAMP: $TS"
-
       - name: Build kernel
         run: |
           WORKDIR="$(pwd)"
@@ -522,7 +507,7 @@ jobs:
           echo "Rustc version: $RUSTC_VERSION"
           echo "Bindgen version: $BINDGEN_VERSION"
           pahole_version=$(pahole --version 2>/dev/null | head -n1); [ -z "$pahole_version" ] && echo "pahole: not installed" || echo "pahole: $pahole_version"
-      
+          
           export CCACHE_LOGFILE="${{ github.workspace }}/kernel_workspace/ccache.log"
           export CCACHE_COMPILERCHECK="none"
           export CCACHE_BASEDIR="${{ github.workspace }}"
@@ -531,7 +516,7 @@ jobs:
           export CCACHE_DIR="${{ env.CCACHE_DIR }}"
           export CCACHE_MAXSIZE="3G"
           echo "sloppiness = file_stat_matches,include_file_ctime,include_file_mtime,pch_defines,file_macro,time_macros" >> "$CCACHE_DIR/ccache.conf"
-      
+          
           cd kernel_workspace/common
           wget https://github.com/cctv18/oppo_oplus_realme_sm8850/raw/refs/heads/main/lib/libfakestat.so
           wget https://github.com/cctv18/oppo_oplus_realme_sm8850/raw/refs/heads/main/lib/libfaketimeMT.so
@@ -543,39 +528,35 @@ jobs:
           SO_DIR=$(pwd)
           export PRELOAD_LIBS="$SO_DIR/libfakestat.so $SO_DIR/libfaketimeMT.so"
           export REAL_CLANG_PATH="$WORKDIR/kernel_workspace/clang19/bin/clang"
-      
           echo '#!/bin/bash' > cc-wrapper
-          echo 'export LD_PRELOAD="'"$PRELOAD_LIBS"'"' >> cc-wrapper
-          echo 'export FAKESTAT="'"$FAKESTAT"'"' >> cc-wrapper
-          echo 'export FAKETIME="'"$FAKETIME"'"' >> cc-wrapper
-          echo 'ccache '"$REAL_CLANG_PATH"' "$@"' >> cc-wrapper
-      
+          echo 'export LD_PRELOAD="'$PRELOAD_LIBS'"' >> cc-wrapper
+          echo 'export FAKESTAT="'$FAKESTAT'"' >> cc-wrapper
+          echo 'export FAKETIME="'$FAKETIME'"' >> cc-wrapper
+          echo 'ccache $REAL_CLANG_PATH "$@"' >> cc-wrapper
           echo '#!/bin/bash' > ld-wrapper
-          echo 'export LD_PRELOAD="'"$PRELOAD_LIBS"'"' >> ld-wrapper
-          echo 'export FAKESTAT="'"$FAKESTAT"'"' >> ld-wrapper
-          echo 'export FAKETIME="'"$FAKETIME"'"' >> ld-wrapper
+          echo 'export LD_PRELOAD="'$PRELOAD_LIBS'"' >> ld-wrapper
+          echo 'export FAKESTAT="'$FAKESTAT'"' >> ld-wrapper
+          echo 'export FAKETIME="'$FAKETIME'"' >> ld-wrapper
           echo 'ld.lld "$@"' >> ld-wrapper
-      
+          
           echo "--- [Wrapper Test] Creating a generic time-hook test script ---"
           echo '#!/bin/bash' > test-wrapper.sh
-          echo 'export LD_PRELOAD="'"$PRELOAD_LIBS"'"' >> test-wrapper.sh
-          echo 'export FAKESTAT="'"$FAKESTAT"'"' >> test-wrapper.sh
-          echo 'export FAKETIME="'"$FAKETIME"'"' >> test-wrapper.sh
+          echo 'export LD_PRELOAD="'$PRELOAD_LIBS'"' >> test-wrapper.sh
+          echo 'export FAKESTAT="'$FAKESTAT'"' >> test-wrapper.sh
+          echo 'export FAKETIME="'$FAKETIME'"' >> test-wrapper.sh
           echo 'echo ">>> Wrapper internal env check done."' >> test-wrapper.sh
           echo 'exec "$@"' >> test-wrapper.sh
           chmod +x test-wrapper.sh
-      
           echo "--- [Wrapper Test] Testing (date) ---"
           ./test-wrapper.sh date
           echo "--- [Wrapper Test] Testing (stat) ---"
           ./test-wrapper.sh stat ./Makefile
           echo "--- [Wrapper Test] Done ---"
           chmod +x cc-wrapper ld-wrapper
-      
           echo "--- Pre-build environment time: $(LD_PRELOAD=$PRELOAD_LIBS date) ---"
           echo "--- Pre-build file timestamps: ---"
           LD_PRELOAD=$PRELOAD_LIBS stat ./Makefile
-      
+          
           COMMON_REAL_PATH=$(pwd -P)
           ROOT_REAL_PATH=$(dirname "$COMMON_REAL_PATH")
           KCFLAGS+=" -fdebug-prefix-map=$ROOT_REAL_PATH=."
@@ -601,16 +582,15 @@ jobs:
           export LD=ld.lld HOSTLD=ld.lld AR=llvm-ar NM=llvm-nm AS=clang READELF=llvm-readelf
           export OBJCOPY=llvm-objcopy OBJDUMP=llvm-objdump OBJSIZE=llvm-size STRIP=llvm-strip
           source "./_setup_env.sh" 2>/dev/null || true
-      
+          
           sudo rm -rf /usr/share/dotnet &
           sudo rm -rf /usr/local/lib/android &
           sudo rm -rf /opt/ghc &
           sudo rm -rf /opt/hostedtoolcache/CodeQL &
+          
+          make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC="clang" LD="ld.lld" OBJCOPY="llvm-objcopy" O=out gki_defconfig
       
-          make -j"$(nproc --all)" LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- \
-            CC="clang" LD="ld.lld" OBJCOPY="llvm-objcopy" O=out gki_defconfig
-      
-          # Disable selected KUnit-related configs + force ThinLTO (best-effort)
+          # Disable selected KUnit-related configs (best-effort)
           OUT=out
           disable_list=(
             CONFIG_REGMAP_KUNIT
@@ -627,30 +607,18 @@ jobs:
           )
       
           if [ -x "scripts/config" ] && [ -f "$OUT/.config" ]; then
-            # 1) Disable KUnit bits
             for sym in "${disable_list[@]}"; do
               scripts/config --file "$OUT/.config" -d "$sym" 2>/dev/null || true
             done
-      
-            # 2) Force ThinLTO
-            scripts/config --file "$OUT/.config" -e LTO -e LTO_CLANG 2>/dev/null || true
-            scripts/config --file "$OUT/.config" -e LTO_CLANG_THIN -d LTO_CLANG_FULL -d LTO_NONE 2>/dev/null || true
-            scripts/config --file "$OUT/.config" -e THINLTO 2>/dev/null || true
-      
-            # 3) Re-resolve Kconfig deps
             make O="$OUT" olddefconfig >/dev/null 2>&1 || true
-      
-            echo "---- LTO config ----"
-            grep -E '^(CONFIG_LTO|CONFIG_LTO_CLANG|CONFIG_THINLTO|CONFIG_LTO_CLANG_THIN|CONFIG_LTO_CLANG_FULL|CONFIG_LTO_NONE)=' "$OUT/.config" || true
           else
-            echo "scripts/config or $OUT/.config not found; skipping config edits"
+            echo "scripts/config or $OUT/.config not found; skipping disable_list"
           fi
       
           export CC="$(pwd)/cc-wrapper"
           export LD="$(pwd)/ld-wrapper"
-          make -j"$(nproc --all)" LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- \
-            CC="$(pwd)/cc-wrapper" LD="$(pwd)/ld-wrapper" OBJCOPY="llvm-objcopy" O=out Image
-      
+          make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC="$(pwd)/cc-wrapper" LD="$(pwd)/ld-wrapper" OBJCOPY="llvm-objcopy" O=out Image
+          
           echo "--- Post-build environment time: $(LD_PRELOAD=$PRELOAD_LIBS date) ---"
           echo "--- Post-build file timestamps: ---"
           LD_PRELOAD=$PRELOAD_LIBS stat ./Makefile
@@ -716,7 +684,6 @@ jobs:
           else
             zip -r ../AnyKernel3_${KSU_TYPENAME}_${{ env.KSUVER }}_${{ env.KERNEL_VERSION }}_A15_${{ env.KERNEL_NAME }}.zip ./*
           fi
-
       - name: Upload ccache debug logs
         if: always() && inputs.ccache_debug
         uses: actions/upload-artifact@v4
