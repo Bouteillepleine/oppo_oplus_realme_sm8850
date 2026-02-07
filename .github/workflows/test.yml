@@ -479,6 +479,22 @@ jobs:
           sed -i 's/${scm_version}//' ./common/scripts/setlocalversion
           echo "CONFIG_LOCALVERSION_AUTO=n" >> ./common/arch/arm64/configs/gki_defconfig
 
+      - name: Set kernel build timestamp
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset SOURCE_DATE_EPOCH || true
+
+          # This is what shows in uname -v / uname -a after "#1 SMP PREEMPT"
+          TS="$(TZ='Asia/Shanghai' date '+%a %b %e %T %Z %Y')"
+
+          echo "KBUILD_BUILD_TIMESTAMP=$TS" >> "$GITHUB_ENV"
+          echo "KBUILD_BUILD_VERSION=1" >> "$GITHUB_ENV"
+          echo "KBUILD_BUILD_USER=github" >> "$GITHUB_ENV"
+          echo "KBUILD_BUILD_HOST=actions" >> "$GITHUB_ENV"
+
+          echo "Using KBUILD_BUILD_TIMESTAMP: $TS"
+
       - name: Build kernel
         run: |
           WORKDIR="$(pwd)"
@@ -486,6 +502,15 @@ jobs:
           export PATH="$WORKDIR/kernel_workspace/clang19/bin:$PATH"
           export PATH="$WORKDIR/kernel_workspace/build-tools/bin:$PATH"
           export PATH="$WORKDIR/kernel_workspace/rust/bin:$PATH"
+      
+          # ---- Fix uname build time (avoid 1970) ----
+          unset SOURCE_DATE_EPOCH || true
+          export KBUILD_BUILD_TIMESTAMP="$(TZ='Asia/Shanghai' date '+%a %b %e %T %Z %Y')"
+          export KBUILD_BUILD_VERSION=1
+          export KBUILD_BUILD_USER=github
+          export KBUILD_BUILD_HOST=actions
+          echo "KBUILD_BUILD_TIMESTAMP=$KBUILD_BUILD_TIMESTAMP"
+      
           export CLANG_DIR="$WORKDIR/kernel_workspace/clang19/bin"
           CLANG_VERSION="$($CLANG_DIR/clang --version | head -n 1)"
           LLD_VERSION="$($CLANG_DIR/ld.lld --version | head -n 1)"
@@ -579,7 +604,7 @@ jobs:
           sudo rm -rf /opt/hostedtoolcache/CodeQL &
           
           make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC="clang" LD="ld.lld" OBJCOPY="llvm-objcopy" O=out gki_defconfig
-
+      
           # Disable selected KUnit-related configs (best-effort)
           OUT=out
           disable_list=(
@@ -595,7 +620,7 @@ jobs:
             CONFIG_EXT4_KUNIT_TESTS
             CONFIG_FAT_KUNIT_TEST
           )
-
+      
           if [ -x "scripts/config" ] && [ -f "$OUT/.config" ]; then
             for sym in "${disable_list[@]}"; do
               scripts/config --file "$OUT/.config" -d "$sym" 2>/dev/null || true
@@ -604,7 +629,7 @@ jobs:
           else
             echo "scripts/config or $OUT/.config not found; skipping disable_list"
           fi
-
+      
           export CC="$(pwd)/cc-wrapper"
           export LD="$(pwd)/ld-wrapper"
           make -j$(nproc --all) LLVM=1 ARCH=arm64 CROSS_COMPILE=aarch64-linux-gnu- CC="$(pwd)/cc-wrapper" LD="$(pwd)/ld-wrapper" OBJCOPY="llvm-objcopy" O=out Image
@@ -612,6 +637,11 @@ jobs:
           echo "--- Post-build environment time: $(LD_PRELOAD=$PRELOAD_LIBS date) ---"
           echo "--- Post-build file timestamps: ---"
           LD_PRELOAD=$PRELOAD_LIBS stat ./Makefile
+      
+          # Quick verification: what uname -v will show
+          echo "---- compile.h (timestamp baked into uname) ----"
+          cat out/include/generated/compile.h | sed -n '1,120p' || true
+      
           echo "Kernel build complete!"
           if [[ "${{ github.event.inputs.ccache_debug }}" == "true" ]]; then
             echo "Packing ccache logs and debug info..."
